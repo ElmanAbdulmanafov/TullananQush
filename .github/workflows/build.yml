@@ -46,6 +46,12 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Upgrade Gradle wrapper to 8.7
+        run: |
+          cd android
+          sed -i 's|gradle-.*-all.zip|gradle-8.7-all.zip|g' gradle/wrapper/gradle-wrapper.properties
+          sed -i 's|gradle-.*-bin.zip|gradle-8.7-bin.zip|g' gradle/wrapper/gradle-wrapper.properties
+
       - name: Set SDK and version in build.gradle
         run: |
           sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
@@ -54,22 +60,30 @@ jobs:
           sed -i 's/versionCode .*/versionCode 1/' android/app/build.gradle
           sed -i 's/versionName .*/versionName "1.0.0"/' android/app/build.gradle
 
+      - name: Update AGP to 8.3.0
+        run: |
+          sed -i "s|classpath 'com.android.tools.build:gradle:.*'|classpath 'com.android.tools.build:gradle:8.3.0'|g" android/build.gradle
+          sed -i 's|id "com.android.application" version ".*"|id "com.android.application" version "8.3.0"|g' android/build.gradle || true
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Accept Android licenses
         run: yes | sdkmanager --licenses || true
 
+      - name: Install platform tools
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" || true
+
       - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Build Release AAB
         run: |
           cd android
-          ./gradlew bundleRelease
+          ./gradlew bundleRelease --no-daemon
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
