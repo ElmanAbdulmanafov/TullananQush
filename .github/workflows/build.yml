@@ -46,39 +46,38 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
-      - name: Upgrade Gradle wrapper to 8.7
+      - name: Force Gradle 8.7 by overwriting wrapper properties
         run: |
-          cd android
-          sed -i 's|gradle-.*-all.zip|gradle-8.7-all.zip|g' gradle/wrapper/gradle-wrapper.properties
-          sed -i 's|gradle-.*-bin.zip|gradle-8.7-bin.zip|g' gradle/wrapper/gradle-wrapper.properties
+          cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-all.zip
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
 
-      - name: Set SDK and version in build.gradle
+      - name: Update AGP and SDK versions
         run: |
+          sed -i "s|classpath 'com.android.tools.build:gradle:.*'|classpath 'com.android.tools.build:gradle:8.3.0'|g" android/build.gradle || true
           sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
           sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle
           sed -i 's/minSdkVersion .*/minSdkVersion 22/' android/app/build.gradle
           sed -i 's/versionCode .*/versionCode 1/' android/app/build.gradle
           sed -i 's/versionName .*/versionName "1.0.0"/' android/app/build.gradle
 
-      - name: Update AGP to 8.3.0
-        run: |
-          sed -i "s|classpath 'com.android.tools.build:gradle:.*'|classpath 'com.android.tools.build:gradle:8.3.0'|g" android/build.gradle
-          sed -i 's|id "com.android.application" version ".*"|id "com.android.application" version "8.3.0"|g' android/build.gradle || true
-
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Accept Android licenses
-        run: yes | sdkmanager --licenses || true
-
-      - name: Install platform tools
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" || true
+      - name: Accept licenses and install platform
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" || true
 
       - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon
 
       - name: Build Release AAB
         run: |
