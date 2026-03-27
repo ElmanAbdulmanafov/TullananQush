@@ -9,89 +9,178 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
+    - name: Setup Java 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
 
-      - name: Install Capacitor
-        run: npm install @capacitor/core @capacitor/cli @capacitor/android
+    - name: Install Android SDK 35
+      run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Create capacitor.config.json
-        run: |
-          cat > capacitor.config.json << 'EOF'
-          {
-            "appId": "com.elman.tullananqush",
-            "appName": "TullananQush",
-            "webDir": "www",
-            "server": {
-              "androidScheme": "https"
+    - name: Restore Keystore
+      run: |
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > tullanan-keystore.jks
+
+    - name: Create Android Project
+      run: |
+        mkdir -p project/app/src/main/assets
+        mkdir -p project/app/src/main/java/com/elman/tullananqush
+        mkdir -p project/app/src/main/res/values
+        cp index.html project/app/src/main/assets/
+
+        cat > project/gradle.properties << 'EOF'
+        android.useAndroidX=true
+        android.enableJetifier=true
+        EOF
+
+        cat > project/settings.gradle << 'EOF'
+        rootProject.name = "TullananQush"
+        include ':app'
+        EOF
+
+        cat > project/build.gradle << 'EOF'
+        buildscript {
+            repositories {
+                google()
+                mavenCentral()
             }
-          }
-          EOF
+            dependencies {
+                classpath 'com.android.tools.build:gradle:8.1.0'
+            }
+        }
+        allprojects {
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        EOF
 
-      - name: Create www folder and copy index.html
-        run: |
-          mkdir -p www
-          cp index.html www/index.html
+        cat > project/app/build.gradle << 'EOF'
+        apply plugin: 'com.android.application'
+        android {
+            compileSdkVersion 35
+            namespace 'com.elman.tullananqush'
+            defaultConfig {
+                applicationId 'com.elman.tullananqush'
+                minSdkVersion 22
+                targetSdkVersion 35
+                versionCode 1
+                versionName '1.0'
+            }
+            signingConfigs {
+                release {
+                    storeFile file('keystore.jks')
+                    storePassword 'TullananQush26!'
+                    keyAlias 'TullananQush'
+                    keyPassword 'TullananQush26!'
+                }
+            }
+            buildTypes {
+                release {
+                    minifyEnabled false
+                    signingConfig signingConfigs.release
+                }
+                debug {
+                    minifyEnabled false
+                }
+            }
+        }
+        dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+        }
+        EOF
 
-      - name: Add Android platform
-        run: npx cap add android
+        cat > project/app/src/main/java/com/elman/tullananqush/MainActivity.java << 'EOF'
+        package com.elman.tullananqush;
+        import android.app.Activity;
+        import android.os.Bundle;
+        import android.view.Window;
+        import android.view.WindowManager;
+        import android.webkit.WebView;
+        import android.webkit.WebSettings;
+        import android.webkit.WebChromeClient;
+        import android.webkit.WebViewClient;
+        public class MainActivity extends Activity {
+            private WebView webView;
+            @Override
+            protected void onCreate(Bundle savedInstanceState) {
+                super.onCreate(savedInstanceState);
+                requestWindowFeature(Window.FEATURE_NO_TITLE);
+                getWindow().setFlags(
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN
+                );
+                webView = new WebView(this);
+                WebSettings settings = webView.getSettings();
+                settings.setJavaScriptEnabled(true);
+                settings.setDomStorageEnabled(true);
+                settings.setMediaPlaybackRequiresUserGesture(false);
+                webView.setWebChromeClient(new WebChromeClient());
+                webView.setWebViewClient(new WebViewClient());
+                webView.loadUrl("file:///android_asset/index.html");
+                setContentView(webView);
+            }
+            @Override
+            public void onBackPressed() {
+                if (webView.canGoBack()) {
+                    webView.goBack();
+                } else {
+                    super.onBackPressed();
+                }
+            }
+        }
+        EOF
 
-      - name: Force Gradle 8.7 by overwriting wrapper properties
-        run: |
-          cat > android/gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.7-all.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
+        cat > project/app/src/main/res/values/strings.xml << 'EOF'
+        <resources>
+            <string name="app_name">Tullanan Quş</string>
+        </resources>
+        EOF
 
-      - name: Update AGP and SDK versions
-        run: |
-          sed -i "s|classpath 'com.android.tools.build:gradle:.*'|classpath 'com.android.tools.build:gradle:8.3.0'|g" android/build.gradle || true
-          sed -i 's/compileSdkVersion .*/compileSdkVersion 35/' android/app/build.gradle
-          sed -i 's/targetSdkVersion .*/targetSdkVersion 35/' android/app/build.gradle
-          sed -i 's/minSdkVersion .*/minSdkVersion 22/' android/app/build.gradle
-          sed -i 's/versionCode .*/versionCode 1/' android/app/build.gradle
-          sed -i 's/versionName .*/versionName "1.0.0"/' android/app/build.gradle
+        cat > project/app/src/main/AndroidManifest.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <application
+                android:label="@string/app_name"
+                android:theme="@style/Theme.AppCompat.NoActionBar"
+                android:hardwareAccelerated="true">
+                <activity
+                    android:name=".MainActivity"
+                    android:exported="true"
+                    android:screenOrientation="portrait"
+                    android:configChanges="orientation|screenSize">
+                    <intent-filter>
+                        <action android:name="android.intent.action.MAIN"/>
+                        <category android:name="android.intent.category.LAUNCHER"/>
+                    </intent-filter>
+                </activity>
+            </application>
+        </manifest>
+        EOF
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        cp tullanan-keystore.jks project/app/keystore.jks
 
-      - name: Accept licenses and install platform
-        run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" || true
+        cd project
+        wget -q https://services.gradle.org/distributions/gradle-8.1-bin.zip
+        unzip -q gradle-8.1-bin.zip
+        ./gradle-8.1/bin/gradle wrapper --gradle-version=8.1
+        ./gradlew bundleRelease assembleDebug
 
-      - name: Build Debug APK
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+    - name: Upload AAB (Play Store üçün)
+      uses: actions/upload-artifact@v4
+      with:
+        name: TullananQush-release-aab
+        path: project/app/build/outputs/bundle/release/app-release.aab
 
-      - name: Build Release AAB
-        run: |
-          cd android
-          ./gradlew bundleRelease --no-daemon
-
-      - name: Upload Debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: TullananQush-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-
-      - name: Upload Release AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: TullananQush-release-aab
-          path: android/app/build/outputs/bundle/release/app-release.aab
+    - name: Upload APK (Test üçün)
+      uses: actions/upload-artifact@v4
+      with:
+        name: TullananQush-debug-apk
+        path: project/app/build/outputs/apk/debug/app-debug.apk
