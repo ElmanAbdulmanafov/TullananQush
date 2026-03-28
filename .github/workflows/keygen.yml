@@ -1,0 +1,28 @@
+name: Generate Keystore
+
+on:
+  workflow_dispatch:
+
+jobs:
+  keygen:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Generate Keystore
+      run: |
+        keytool -genkey -v \
+          -keystore tullanan-keystore.jks \
+          -alias TullananQush \
+          -keyalg RSA \
+          -keysize 2048 \
+          -validity 10000 \
+          -dname "CN=TullananQush, OU=Game, O=Elman, L=Baku, S=Baku, C=AZ" \
+          -storepass Flippy2026! \
+          -keypass Flippy2026!
+        base64 -w 0 tullanan-keystore.jks > keystore.b64
+        cat keystore.b64
+
+    - name: Upload keystore b64
+      uses: actions/upload-artifact@v4
+      with:
+        name: keystore-b64
+        path: keystore.b64
